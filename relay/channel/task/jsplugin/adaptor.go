@@ -31,6 +31,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	kitdto "github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -309,7 +310,7 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	if text, ok := descriptor.Body.(string); ok {
 		return strings.NewReader(text), nil
 	}
-	inlined, err := inlineJSONFilePlaceholders(c, descriptor.Body)
+	inlined, err := a.inlineJSONFilePlaceholders(c, descriptor.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +329,7 @@ func maxInlineFileBytes() int64 {
 	return int64(limitMB) << 20
 }
 
-func inlineJSONFilePlaceholders(c *gin.Context, body any) (any, error) {
+func (a *TaskAdaptor) inlineJSONFilePlaceholders(c *gin.Context, body any) (any, error) {
 	cloned := jsonValue(body)
 	var form *multipart.Form
 	if c != nil && c.Request != nil && strings.Contains(c.GetHeader("Content-Type"), "multipart/form-data") {
@@ -340,18 +341,32 @@ func inlineJSONFilePlaceholders(c *gin.Context, body any) (any, error) {
 		defer form.RemoveAll()
 	}
 	limit := maxInlineFileBytes()
-	var total int64
-	return replaceJSONFilePlaceholders(cloned, form, limit, &total)
+	resolver := filePlaceholderResolver{ctx: c.Request.Context(), form: form, limit: limit, config: system_setting.GetPluginFileStorage(), allowURL: slices.Contains(a.plugin.Meta.RequiredCapabilities, pluginruntime.CapabilityFileURL), urls: make(map[string]storedFileURL)}
+	return resolver.replace(cloned)
 }
 
-func replaceJSONFilePlaceholders(value any, form *multipart.Form, limit int64, total *int64) (any, error) {
+type storedFileURL struct {
+	url  string
+	size int64
+}
+type filePlaceholderResolver struct {
+	ctx      context.Context
+	form     *multipart.Form
+	limit    int64
+	total    int64
+	config   system_setting.PluginFileStorageConfig
+	allowURL bool
+	urls     map[string]storedFileURL
+}
+
+func (r *filePlaceholderResolver) replace(value any) (any, error) {
 	switch typed := value.(type) {
 	case map[string]any:
 		if _, isPlaceholder := typed["__fileRef"]; isPlaceholder {
-			return encodeFilePlaceholder(typed, form, limit, total)
+			return r.encode(typed)
 		}
 		for key, item := range typed {
-			replaced, err := replaceJSONFilePlaceholders(item, form, limit, total)
+			replaced, err := r.replace(item)
 			if err != nil {
 				return nil, err
 			}
@@ -360,7 +375,7 @@ func replaceJSONFilePlaceholders(value any, form *multipart.Form, limit int64, t
 		return typed, nil
 	case []any:
 		for index, item := range typed {
-			replaced, err := replaceJSONFilePlaceholders(item, form, limit, total)
+			replaced, err := r.replace(item)
 			if err != nil {
 				return nil, err
 			}
@@ -372,7 +387,7 @@ func replaceJSONFilePlaceholders(value any, form *multipart.Form, limit int64, t
 	}
 }
 
-func encodeFilePlaceholder(placeholder map[string]any, form *multipart.Form, limit int64, total *int64) (string, error) {
+func (r *filePlaceholderResolver) encode(placeholder map[string]any) (string, error) {
 	for key := range placeholder {
 		switch key {
 		case "__fileRef", "encoding", "mimeType", "maxBytes":
@@ -385,30 +400,64 @@ func encodeFilePlaceholder(placeholder map[string]any, form *multipart.Form, lim
 		return "", fmt.Errorf("unknown file reference %q", ref)
 	}
 	encoding, _ := placeholder["encoding"].(string)
-	if encoding != "base64" && encoding != "dataUrl" {
-		return "", fmt.Errorf("file placeholder encoding must be \"base64\" or \"dataUrl\"")
+	if encoding != "base64" && encoding != "dataUrl" && encoding != "url" {
+		return "", fmt.Errorf("file placeholder encoding must be base64, dataUrl or url")
 	}
-	if form == nil {
+	if encoding == "url" && !r.allowURL {
+		return "", fmt.Errorf("file URL placeholders require file-url@1")
+	}
+	if r.form == nil {
 		return "", fmt.Errorf("unknown file reference %q", ref)
 	}
-	field := strings.TrimPrefix(ref, "request_file:")
-	files := form.File[field]
+	field, validRef := strings.CutPrefix(ref, "request_file:")
+	if !validRef {
+		return "", fmt.Errorf("unknown file reference %q", ref)
+	}
+	files := r.form.File[field]
 	if len(files) == 0 {
 		return "", fmt.Errorf("unknown file reference %q", ref)
 	}
 	header := files[0]
-	maxBytes := limit
+	maxBytes := r.limit
 	if raw, exists := placeholder["maxBytes"]; exists {
 		n, ok := usageNumber(raw, false)
 		if !ok || n <= 0 || n != math.Trunc(n) {
 			return "", fmt.Errorf("invalid file placeholder")
 		}
-		if int64(n) < maxBytes {
+		if n < float64(maxBytes) {
 			maxBytes = int64(n)
 		}
 	}
 	if header.Size > maxBytes {
 		return "", fmt.Errorf("file %q exceeds the %d byte limit", ref, maxBytes)
+	}
+	if encoding == "url" {
+		if stored, ok := r.urls[ref]; ok {
+			if stored.size > maxBytes {
+				return "", fmt.Errorf("file %q exceeds the %d byte limit", ref, maxBytes)
+			}
+			return stored.url, nil
+		}
+		maxBytes = min(maxBytes, r.limit-r.total)
+		if header.Size > maxBytes {
+			return "", fmt.Errorf("uploaded files exceed the %d byte limit", r.limit)
+		}
+		file, err := header.Open()
+		if err != nil {
+			return "", err
+		}
+		defer file.Close()
+		mimeType := header.Header.Get("Content-Type")
+		if override, ok := placeholder["mimeType"].(string); ok && strings.TrimSpace(override) != "" {
+			mimeType = override
+		}
+		fileURL, size, err := service.StorePluginFile(r.ctx, r.config, file, mimeType, maxBytes)
+		if err != nil {
+			return "", err
+		}
+		r.total += size
+		r.urls[ref] = storedFileURL{url: fileURL, size: size}
+		return fileURL, nil
 	}
 	file, openErr := header.Open()
 	if openErr != nil {
@@ -422,10 +471,10 @@ func encodeFilePlaceholder(placeholder map[string]any, form *multipart.Form, lim
 	if int64(len(data)) > maxBytes {
 		return "", fmt.Errorf("file %q exceeds the %d byte limit", ref, maxBytes)
 	}
-	if *total+int64(len(data)) > limit {
-		return "", fmt.Errorf("inlined files exceed the %d byte limit", limit)
+	if r.total+int64(len(data)) > r.limit {
+		return "", fmt.Errorf("inlined files exceed the %d byte limit", r.limit)
 	}
-	*total += int64(len(data))
+	r.total += int64(len(data))
 	encoded := base64.StdEncoding.EncodeToString(data)
 	if encoding == "base64" {
 		return encoded, nil

@@ -204,6 +204,8 @@ func SetApiRouter(router *gin.Engine) {
 		optionRoute.Use(middleware.RootAuth())
 		{
 			optionRoute.GET("/", controller.GetOptions)
+			optionRoute.GET("/plugin_file_storage", controller.GetPluginFileStorage)
+			optionRoute.PUT("/plugin_file_storage", middleware.SessionCookieOriginGuard(), controller.UpdatePluginFileStorage)
 			optionRoute.PUT("/", controller.UpdateOption)
 			optionRoute.PUT("/passkey/domains", controller.UpdatePasskeyDomains)
 			optionRoute.GET("/model_pricing", controller.GetModelPricingConfig)

@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 type Option struct {
@@ -221,6 +222,10 @@ func SyncOptions(frequency int) {
 }
 
 func validateOptionValue(key string, value string) error {
+	if key == system_setting.PluginFileStorageOption {
+		_, err := system_setting.ParsePluginFileStorage(value)
+		return err
+	}
 	if key == operation_setting.ToolPriceOptionKey {
 		return operation_setting.ValidateToolPricesJSON(value)
 	}
@@ -234,6 +239,9 @@ func validateOptionValue(key string, value string) error {
 }
 
 func UpdateOption(key string, value string) error {
+	if key == system_setting.PluginFileStorageOption {
+		return UpdateOptionsBulk(map[string]string{key: value})
+	}
 	if IsPasskeyDomainOption(key) {
 		_, err := UpdatePasskeyDomainOptions(map[string]string{key: value}, false, "")
 		return err
@@ -281,12 +289,17 @@ func UpdateOptionsBulk(values map[string]string) error {
 	}
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		for k, v := range values {
+			writer := tx
+			if k == system_setting.PluginFileStorageOption {
+				// Even SQL error logs must not interpolate the stored storage credentials.
+				writer = tx.Session(&gorm.Session{Logger: tx.Logger.LogMode(gormlogger.Silent)})
+			}
 			option := Option{Key: k}
-			if err := tx.FirstOrCreate(&option, Option{Key: k}).Error; err != nil {
+			if err := writer.FirstOrCreate(&option, Option{Key: k}).Error; err != nil {
 				return err
 			}
 			option.Value = v
-			if err := tx.Save(&option).Error; err != nil {
+			if err := writer.Save(&option).Error; err != nil {
 				return err
 			}
 		}
@@ -312,6 +325,11 @@ func updateOptionMap(key string, value string) (err error) {
 	}
 	common.OptionMapRWMutex.Lock()
 	defer common.OptionMapRWMutex.Unlock()
+	if key == system_setting.PluginFileStorageOption {
+		if err := system_setting.SetPluginFileStorage(value); err != nil {
+			return err
+		}
+	}
 	common.OptionMap[key] = value
 
 	// 检查是否是模型配置 - 使用更规范的方式处理

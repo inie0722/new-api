@@ -190,6 +190,10 @@ func UpdateOption(c *gin.Context) {
 		})
 		return
 	}
+	if option.Key == system_setting.PluginFileStorageOption {
+		common.ApiErrorMsg(c, "use the plugin file storage settings endpoint")
+		return
+	}
 	switch option.Value.(type) {
 	case bool:
 		option.Value = common.Interface2String(option.Value.(bool))

@@ -116,7 +116,8 @@ func redactTaskArtifactAccessQuery() gin.HandlerFunc {
 			strings.HasSuffix(path, "/content")
 		isLegacyVideoContent := strings.HasPrefix(path, "/v1/videos/") &&
 			strings.HasSuffix(path, "/content")
-		if !isArtifactContent && !isLegacyVideoContent {
+		isPluginFile := strings.HasPrefix(path, "/v1/plugin-files/") && strings.HasSuffix(path, "/content")
+		if !isArtifactContent && !isLegacyVideoContent && !isPluginFile {
 			c.Next()
 			return
 		}

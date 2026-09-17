@@ -13,6 +13,7 @@ import (
 )
 
 const (
+	CapabilityFileURL        = "file-url@1"
 	CapabilityJSONClone      = "json-clone@1"
 	CapabilitySubmitSSEDelta = "submit-sse-delta@1"
 	MaxJSONToolBytes         = 1 << 20
@@ -23,7 +24,7 @@ const (
 
 // HasCapability describes host APIs independently of a plugin's mutable globals.
 func HasCapability(name string) bool {
-	return name == CapabilityJSONClone || name == CapabilitySubmitSSEDelta
+	return name == CapabilityJSONClone || name == CapabilitySubmitSSEDelta || name == CapabilityFileURL
 }
 
 // JSONState owns a request-local JSON result. Appended strings stay in Go and
