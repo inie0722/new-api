@@ -1,5 +1,42 @@
 package dto
 
+// SeedanceTaskResponse is the public Ark-compatible task view. Identity and
+// lifecycle fields are always populated from the host's persisted task.
+type SeedanceTaskResponse struct {
+	ID               string               `json:"id"`
+	Model            string               `json:"model"`
+	Status           string               `json:"status"`
+	CreatedAt        int64                `json:"created_at"`
+	UpdatedAt        int64                `json:"updated_at"`
+	Error            *SeedanceTaskError   `json:"error,omitempty"`
+	Content          *SeedanceTaskContent `json:"content,omitempty"`
+	Usage            *SeedanceTaskUsage   `json:"usage,omitempty"`
+	Resolution       *string              `json:"resolution,omitempty"`
+	Ratio            *string              `json:"ratio,omitempty"`
+	Duration         *int64               `json:"duration,omitempty"`
+	Frames           *int64               `json:"frames,omitempty"`
+	FramesPerSecond  *int64               `json:"framespersecond,omitempty"`
+	Seed             *int64               `json:"seed,omitempty"`
+	GenerateAudio    *bool                `json:"generate_audio,omitempty"`
+	OutputFormat     *string              `json:"output_format,omitempty"`
+	SafetyIdentifier *string              `json:"safety_identifier,omitempty"`
+}
+
+type SeedanceTaskError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+type SeedanceTaskContent struct {
+	VideoURL     string `json:"video_url,omitempty"`
+	LastFrameURL string `json:"last_frame_url,omitempty"`
+}
+
+type SeedanceTaskUsage struct {
+	CompletionTokens *int64 `json:"completion_tokens,omitempty"`
+	TotalTokens      *int64 `json:"total_tokens,omitempty"`
+}
+
 // PluginResponsesResponse is the host-owned Responses facade used for stream
 // snapshots and sanitized terminal failures. Non-stream success objects may
 // retain additional validated plugin fields, but identifiers, lifecycle state,

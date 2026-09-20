@@ -2,6 +2,7 @@ package router
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/middleware"
@@ -26,6 +27,21 @@ func SetTaskPluginProtocolRouter(router *gin.Engine) {
 
 func taskPluginProtocolHandlers(protocol, operation string) ([]gin.HandlerFunc, error) {
 	switch protocol + "." + operation {
+	case "seedance_video.create":
+		return []gin.HandlerFunc{
+			middleware.RouteTag("relay"), middleware.TokenAuth(), middleware.SystemPerformanceCheck(), middleware.ModelRequestRateLimit(),
+			middleware.PinTaskPluginEndpoint(),
+			func(c *gin.Context) {
+				if _, exists := c.Get(pluginruntime.ContextKeyPinnedEndpoint); !exists {
+					c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": gin.H{"code": "unsupported_model", "message": "No Seedance plugin supports the requested model"}})
+					return
+				}
+				c.Next()
+			},
+			middleware.PrepareTaskPluginEndpoint(), middleware.Distribute(), controller.RelayTask,
+		}, nil
+	case "seedance_video.retrieve":
+		return []gin.HandlerFunc{middleware.RouteTag("relay"), middleware.TokenAuth(), controller.RetrieveSeedanceTask}, nil
 	case "openai_responses.create":
 		return []gin.HandlerFunc{
 			middleware.RouteTag("relay"), middleware.SystemPerformanceCheck(), middleware.TokenAuth(),

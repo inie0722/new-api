@@ -79,6 +79,10 @@ type HostProtocolDefinition struct {
 }
 
 var hostProtocols = []HostProtocolDefinition{
+	{Name: "seedance_video", Operations: []HostProtocolOperation{
+		{Name: "create", Methods: []string{http.MethodPost}, Path: "/seedance/api/v3/contents/generations/tasks", BodyKinds: []BodyKind{BodyJSON}, ModelField: "model", RequiredProtocolMembers: []string{"decodeRequest"}},
+		{Name: "retrieve", Methods: []string{http.MethodGet}, Path: "/seedance/api/v3/contents/generations/tasks/:task_id", BodyKinds: []BodyKind{BodyNone}, RequiredProtocolMembers: []string{"render"}},
+	}},
 	{Name: "openai_responses", Operations: []HostProtocolOperation{
 		{Name: "create", Methods: []string{http.MethodPost}, Path: "/v1/responses", BodyKinds: []BodyKind{BodyJSON}, ModelField: "model", RequiredProtocolMembers: []string{"decodeRequest"}, Modes: []ProtocolMode{{Name: "stream", Hook: "renderEvents"}, {Name: "sync", Hook: "renderFinal"}, {Name: "background", Hook: "renderFinal"}}},
 		{Name: "retrieve", Methods: []string{http.MethodGet}, Path: "/v1/responses/:response_id", BodyKinds: []BodyKind{BodyNone}},

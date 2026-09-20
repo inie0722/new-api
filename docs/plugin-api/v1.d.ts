@@ -24,17 +24,18 @@ export type DecodedBody =
   | Readonly<{kind: "none"}>;
 
 export interface NativeDecodeContext {method: string; path: string; params: Readonly<Record<string, string>>; query: Readonly<Record<string, readonly string[]>>; body: DecodedBody}
-export interface ProtocolDecodeContext extends NativeDecodeContext {protocol: "openai_responses" | "openai_video"; operation: string; model: string; stream: boolean}
+export interface ProtocolDecodeContext extends NativeDecodeContext {protocol: "openai_responses" | "openai_video" | "seedance_video"; operation: string; model: string; stream: boolean}
 export type SubmitIntent = {kind: "submit"; model: string; action?: string; requestBody?: unknown; originTaskIds?: readonly string[]};
 export type QueryIntent = {kind: "query"; taskIds: readonly string[]};
 export type TaskIntent = SubmitIntent | QueryIntent;
 export interface NativeRoute {method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; path: string; type: "submit" | "query" | "dynamic"; action?: string; taskIdParam?: string; decode?: string; render: string; models?: readonly string[]}
-export type ProtocolName = "openai_responses" | "openai_video";
+export type ProtocolName = "openai_responses" | "openai_video" | "seedance_video";
 export type ResponsesMode = "stream" | "sync" | "background";
 export type ProtocolClaim =
   | "openai_video"
+  | "seedance_video"
   | {name: "openai_responses"; supports: readonly ResponsesMode[]; models?: readonly string[]}
-  | {name: "openai_video"; models?: readonly string[]};
+  | {name: "openai_video" | "seedance_video"; models?: readonly string[]};
 export type LocalizedText = string | ({ en: string } & Record<string, string>);
 export type UsageFieldSchema =
   | {type: "number"; unit: "count"; unitLabel?: LocalizedText; description?: LocalizedText}
@@ -57,6 +58,7 @@ export declare const meta: Meta;
 export declare const native: Record<string, ((ctx: NativeDecodeContext) => TaskIntent) | ((ctx: NativeDecodeContext, task: TaskView | readonly TaskView[]) => unknown)> & {error?: (ctx: NativeDecodeContext, error: {code: string; message: string; httpStatus: number; retryable: boolean}) => unknown};
 export declare const protocols: {
   openai_responses?: {decodeRequest(ctx: ProtocolDecodeContext): SubmitIntent; renderEvents?(ctx: unknown, task: TaskView, previousState: unknown): unknown; renderFinal?(ctx: unknown, task: TaskView): unknown};
+  seedance_video?: {decodeRequest(ctx: ProtocolDecodeContext): SubmitIntent; render(ctx: {protocol: "seedance_video"; operation: "retrieve"; model: string}, task: TaskView): unknown};
   openai_video?: {decodeRequest(ctx: ProtocolDecodeContext): SubmitIntent; render(ctx: unknown, task: TaskView): unknown};
 };
 export declare function buildSubmitRequest(ctx: DriverContext): RequestDescriptor;

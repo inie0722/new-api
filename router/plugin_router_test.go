@@ -330,6 +330,8 @@ func TestPluginStaticRouteConflictsAreExcluded(t *testing.T) {
 		staticPath string
 		pluginPath string
 	}{
+		{name: "Seedance create", staticPath: "/seedance/api/v3/contents/generations/tasks", pluginPath: "/seedance/api/v3/contents/generations/tasks"},
+		{name: "Seedance retrieve", staticPath: "/seedance/api/v3/contents/generations/tasks/:task_id", pluginPath: "/seedance/api/v3/contents/generations/tasks/fixed"},
 		{name: "parameter intersection", staticPath: "/core/:id", pluginPath: "/core/fixed"},
 		{name: "trailing slash redirect shadow", staticPath: "/fixed", pluginPath: "/fixed/"},
 		{name: "catchall redirect shadow", staticPath: "/files/*filepath", pluginPath: "/files"},

@@ -37,6 +37,13 @@ export type HostProtocolEndpoint = {
  * Colon path params are written in `{brace}` form to match the public docs.
  */
 export const HOST_PROTOCOL_ENDPOINTS: Record<string, HostProtocolEndpoint[]> = {
+  seedance_video: [
+    { method: 'POST', path: '/seedance/api/v3/contents/generations/tasks' },
+    {
+      method: 'GET',
+      path: '/seedance/api/v3/contents/generations/tasks/{task_id}',
+    },
+  ],
   openai_responses: [
     { method: 'POST', path: '/v1/responses', modeBearing: true },
     { method: 'GET', path: '/v1/responses/{response_id}' },

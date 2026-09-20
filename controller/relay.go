@@ -685,6 +685,11 @@ func presentTaskSubmission(c *gin.Context, outcome *taskSubmissionOutcome) {
 		}
 	}
 	if pinnedValue, exists := c.Get(pluginruntime.ContextKeyPinnedEndpoint); exists {
+		if pinned, ok := pinnedValue.(pluginruntime.PinnedEndpoint); ok && pinned.Protocol == "seedance_video" && pinned.Operation.Name == "create" {
+			diagnostics.present(outcome.Task, "seedance_video_create")
+			c.JSON(http.StatusOK, gin.H{"id": outcome.Task.TaskID})
+			return
+		}
 		if pinned, ok := pinnedValue.(pluginruntime.PinnedEndpoint); ok && pinned.Protocol == "openai_video" && pinned.Operation.Name == "create" {
 			diagnostics.present(outcome.Task, "openai_video_create")
 			c.JSON(http.StatusOK, outcome.Task.ToOpenAIVideo())
@@ -707,6 +712,12 @@ func presentTaskSubmission(c *gin.Context, outcome *taskSubmissionOutcome) {
 
 func respondTaskSubmissionError(c *gin.Context, taskErr *taskdto.TaskError) {
 	newTaskPluginSubmitDiagnostics(c).presentError(taskErr)
+	if pinnedValue, exists := c.Get(pluginruntime.ContextKeyPinnedEndpoint); exists {
+		if pinned, ok := pinnedValue.(pluginruntime.PinnedEndpoint); ok && pinned.Protocol == "seedance_video" {
+			respondPluginProtocolError(c, taskErr.StatusCode, taskErr.Code, taskErr.Message)
+			return
+		}
+	}
 	if middleware.RespondTaskPluginError(c, taskErr) {
 		return
 	}
